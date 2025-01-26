@@ -9,6 +9,7 @@ from langchain.schema import Document
 from langchain.vectorstores.chroma import Chroma
 from langchain.prompts import ChatPromptTemplate
 from langchain.chat_models import ChatOpenAI
+from uuid import uuid4
 
 # Load environment variables
 load_dotenv('openai.env')
@@ -27,14 +28,43 @@ logger = logging.getLogger(__name__)
 # Constants
 CHROMA_PATH = "chroma"
 PROMPT_TEMPLATE = """
-You are a legal expert specializing in the given context. Answer the question based solely on the following context:
+You are a legal expert specializing in the provided context. Your task is to answer the user's question based solely on the content of the provided context. 
 
+---
+
+### Guidelines:
+1. **Use Only the Provided Context**:
+   - Do not include any information, assumptions, or interpretations not explicitly present in the context.
+   - Avoid referencing external knowledge or adding any opinions.
+
+2. **Be Concise and Accurate**:
+   - Ensure your response is precise and directly addresses the question.
+   - If the context does not contain enough information to answer the question, explicitly state: 
+     "The provided context does not contain sufficient information to answer this question."
+
+3. **Format Your Response**:
+   - Provide a clear and structured answer.
+   - Include references to specific parts of the context (e.g., page numbers, sections, or metadata) if available.
+
+4. **Guardrails**:
+   - Avoid speculation or generalizations.
+   - Do not provide legal advice or interpretations beyond what is stated in the context.
+
+---
+
+### Context:
 {context}
 
 ---
 
-Provide a legally accurate response to the following question based on the above context: {question}
+### Question:
+{question}
+
+---
+
+### Response:
 """
+
 
 # Utility Functions
 def split_text(documents: list[Document], chunk_size: int = 400, chunk_overlap: int = 100) -> list[Document]:
@@ -57,6 +87,7 @@ def split_text(documents: list[Document], chunk_size: int = 400, chunk_overlap: 
     logger.info(f"Split into {len(chunks)} chunks.")
     return chunks
 
+
 def save_to_chroma(chunks: list[Document], directory: str = CHROMA_PATH):
     """
     Save text chunks to Chroma vector store.
@@ -65,14 +96,21 @@ def save_to_chroma(chunks: list[Document], directory: str = CHROMA_PATH):
         chunks (list[Document]): List of Document objects.
         directory (str): Directory to save the Chroma database.
     """
+
     if os.path.exists(directory):
-        logger.info(f"Clearing existing Chroma database at {directory}.")
-        shutil.rmtree(directory)
+        logger.info(f"Using existing Chroma database at {directory}.")
     else:
         logger.info(f"Creating new Chroma database at {directory}.")
+
     db = Chroma.from_documents(chunks, OpenAIEmbeddings(), persist_directory=directory)
+
+    # Assign unique IDs to documents
+    for chunk in chunks:
+        chunk.metadata["id"] = str(uuid4())
+
     db.persist()
     logger.info(f"Saved {len(chunks)} chunks to {directory}.")
+
 
 def query_rag(query_text: str, directory: str = CHROMA_PATH) -> tuple[str, str]:
     """

@@ -8,3 +8,6 @@ tiktoken
 fastapi
 uvicorn
 python-multipart
+gradio
+streamlit
+chroma-migrate
