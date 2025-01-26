@@ -16,6 +16,7 @@ if selected_collection:
     collection = client.get_collection(selected_collection)
     st.header(f"Documents in Collection: {selected_collection}")
 
+
     # Display documents
     documents = collection.get(include=["documents", "metadatas"])
     if "documents" in documents:
