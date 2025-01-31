@@ -1,4 +1,5 @@
 import streamlit as st
+import torch
 from langchain_community.document_loaders import PDFPlumberLoader
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -23,11 +24,9 @@ def apply_styles():
         unsafe_allow_html=True,
     )
 
-def load_pdf(uploaded_file):
-    """Load PDF file and return document data."""
-    with open("temp.pdf", "wb") as f:
-        f.write(uploaded_file.getvalue())
-    return PDFPlumberLoader("temp.pdf").load()
+def load_pdf(file_path):
+    """Load a PDF file properly."""
+    return PDFPlumberLoader(file_path).load()
 
 def create_retriever(docs):
     """Process documents and create a retriever."""
@@ -36,8 +35,10 @@ def create_retriever(docs):
     return FAISS.from_documents(documents, embedder).as_retriever(search_type="similarity", search_kwargs={"k": 3})
 
 def get_qa_chain(retriever):
-    """Set up the QA chain using the retriever."""
-    llm = Ollama(model="deepseek-r1:1.5b")
+    """Set up the QA chain using the retriever with GPU fallback."""
+    model_name = "deepseek-r1:1.5b"
+    llm = Ollama(model=model_name)
+
     qa_prompt = PromptTemplate.from_template(
         """
         You are a legal expert specializing in the provided context. Your task is to answer the user's question based solely on the provided content.
@@ -67,8 +68,10 @@ def get_qa_chain(retriever):
     )
 
 def summarize_document(docs):
-    """Generate a summary of the document."""
-    llm = Ollama(model="deepseek-r1:1.5b")
+    """Generate a summary of the document with GPU fallback."""
+    model_name = "deepseek-r1:1.5b"
+    llm = Ollama(model=model_name)
+
     summary_prompt = PromptTemplate.from_template(
         """
         Summarize the following legal document concisely, preserving key details and intent.
