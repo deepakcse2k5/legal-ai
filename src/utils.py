@@ -65,3 +65,19 @@ def get_qa_chain(retriever):
         verbose=True,
         return_source_documents=True,
     )
+
+def summarize_document(docs):
+    """Generate a summary of the document."""
+    llm = Ollama(model="deepseek-r1:1.5b")
+    summary_prompt = PromptTemplate.from_template(
+        """
+        Summarize the following legal document concisely, preserving key details and intent.
+
+        ---
+        Document: {document}
+
+        Summary:
+        """
+    )
+    llm_chain = LLMChain(llm=llm, prompt=summary_prompt, verbose=True)
+    return llm_chain.run({"document": " ".join([doc.page_content for doc in docs])})
