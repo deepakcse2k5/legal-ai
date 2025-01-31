@@ -9,3 +9,6 @@ sentence_transformers
 pdfplumber
 faiss-cpu
 uvicorn
+fpdf
+pymupdf
+python-docx

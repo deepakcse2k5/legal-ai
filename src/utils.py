@@ -1,5 +1,3 @@
-import streamlit as st
-import torch
 from langchain_community.document_loaders import PDFPlumberLoader
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -10,19 +8,6 @@ from langchain.chains.llm import LLMChain
 from langchain.chains.combine_documents.stuff import StuffDocumentsChain
 from langchain.chains import RetrievalQA
 
-def apply_styles():
-    """Apply custom Streamlit styles."""
-    st.markdown(
-        """
-        <style>
-        .stApp { background-color: #F5F5F5; color: #4561e9; }
-        .stButton>button { background-color: #1E90FF; color: white; border-radius: 5px; padding: 10px 20px; font-size: 16px; }
-        .stTextInput>div>div>input { border: 2px solid #1E90FF; border-radius: 5px; padding: 10px; font-size: 16px; }
-        .stFileUploader>div>div>div>button { background-color: #FF6347; color: white; border-radius: 5px; padding: 10px 20px; font-size: 16px; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
 def load_pdf(file_path):
     """Load a PDF file properly."""
