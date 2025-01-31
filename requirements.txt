@@ -1,7 +1,11 @@
-langchain
 streamlit
-ollama
+langchain
+langchain_community
 langchain_experimental
+python-multipart
+fastapi
+ollama
 sentence_transformers
 pdfplumber
 faiss-cpu
+uvicorn
