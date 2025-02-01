@@ -112,7 +112,7 @@ with gr.Blocks() as demo:
     gr.Markdown("## 📑 AI-Powered Legal Document Processing System")
 
     with gr.Tab("📂 Upload Document"):
-        upload_button = gr.File(label="Upload PDF")
+        upload_button = gr.File(label="Upload PDF", type="file")
         upload_output = gr.Textbox()
         upload_button.upload(upload_file, upload_button, upload_output)
 
