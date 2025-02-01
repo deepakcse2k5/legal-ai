@@ -27,25 +27,37 @@ latest_state = {
 
 
 # ✅ Function to Upload and Process PDF
+# def upload_file(file):
+#     try:
+#         temp_filename = "latest_uploaded.pdf"
+#         with open(temp_filename, "wb") as buffer:
+#             buffer.write(file.read())
+#
+#         # Process PDF
+#         docs = load_pdf(temp_filename)
+#         retriever = create_retriever(docs)
+#         qa_chain = get_qa_chain(retriever)
+#
+#         latest_state["docs"] = docs
+#         latest_state["retriever"] = retriever
+#         latest_state["qa_chain"] = qa_chain
+#
+#         os.remove(temp_filename)  # Cleanup
+#         return "File uploaded and processed successfully"
+#     except Exception as e:
+#         return f"Upload failed: {str(e)}"
+
 def upload_file(file):
-    try:
-        temp_filename = "latest_uploaded.pdf"
-        with open(temp_filename, "wb") as buffer:
-            buffer.write(file.read())
+    if file is None:
+        return "❌ No file received!"
 
-        # Process PDF
-        docs = load_pdf(temp_filename)
-        retriever = create_retriever(docs)
-        qa_chain = get_qa_chain(retriever)
+    temp_filename = "latest_uploaded.pdf"
+    with open(temp_filename, "wb") as buffer:
+        buffer.write(file.read())
 
-        latest_state["docs"] = docs
-        latest_state["retriever"] = retriever
-        latest_state["qa_chain"] = qa_chain
+    print(f"📂 Received File: {file.name}")
+    return f"✅ File uploaded successfully! (Saved as {temp_filename})"
 
-        os.remove(temp_filename)  # Cleanup
-        return "File uploaded and processed successfully"
-    except Exception as e:
-        return f"Upload failed: {str(e)}"
 
 
 # ✅ Function to Get Summary
@@ -112,7 +124,7 @@ with gr.Blocks() as demo:
     gr.Markdown("## 📑 AI-Powered Legal Document Processing System")
 
     with gr.Tab("📂 Upload Document"):
-        upload_button = gr.File(label="Upload PDF", type="file")
+        upload_button = gr.File(label="Upload PDF")
         upload_output = gr.Textbox()
         upload_button.upload(upload_file, upload_button, upload_output)
 
