@@ -50,15 +50,28 @@ latest_state = {
 def upload_file(file):
     if file is None:
         return "❌ No file received!"
+    try:
 
-    temp_filename = file.name  # Gradio returns file path
+        temp_filename = file.name  # Gradio returns file path
 
-    with open(temp_filename, "rb") as source, open("latest_uploaded.pdf", "wb") as buffer:
-        buffer.write(source.read())  # ✅ Correct: Read and write file properly
+        with open(temp_filename, "rb") as source, open("latest_uploaded.pdf", "wb") as buffer:
+            buffer.write(source.read())  # ✅ Correct: Read and write file properly
 
-    print(f"📂 Received File: {temp_filename}")
+        print(f"📂 Received File: {temp_filename}")
 
-    return "✅ File uploaded successfully!"
+                # Process PDF
+        docs = load_pdf(temp_filename)
+        retriever = create_retriever(docs)
+        qa_chain = get_qa_chain(retriever)
+
+        latest_state["docs"] = docs
+        latest_state["retriever"] = retriever
+        latest_state["qa_chain"] = qa_chain
+
+        os.remove(temp_filename)  # Cleanup
+        return "File uploaded and processed successfully"
+    except Exception as e:
+        return f"Upload failed: {str(e)}"
 
 
 
