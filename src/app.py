@@ -51,12 +51,15 @@ def upload_file(file):
     if file is None:
         return "❌ No file received!"
 
-    temp_filename = "latest_uploaded.pdf"
-    with open(temp_filename, "wb") as buffer:
-        buffer.write(file.read())
+    temp_filename = file.name  # Gradio returns file path
 
-    print(f"📂 Received File: {file.name}")
-    return f"✅ File uploaded successfully! (Saved as {temp_filename})"
+    with open(temp_filename, "rb") as source, open("latest_uploaded.pdf", "wb") as buffer:
+        buffer.write(source.read())  # ✅ Correct: Read and write file properly
+
+    print(f"📂 Received File: {temp_filename}")
+
+    return "✅ File uploaded successfully!"
+
 
 
 
