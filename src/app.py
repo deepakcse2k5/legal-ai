@@ -10,6 +10,9 @@ from typing import Optional
 # Import utilities from modules (Make sure files exist in the same directory)
 from src.utils import load_pdf, create_retriever, get_qa_chain, summarize_document
 from src.generate_report import extract_text_from_pdf, generate_complaint_report, save_report_as_docx
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
 
 # Thread pool for handling CPU-heavy tasks
 executor = ThreadPoolExecutor()
@@ -151,6 +154,7 @@ with gr.Blocks() as demo:
             outputs=report_output
         )
 
-# ✅ Launch Gradio App (Auto generates a public link)
 if __name__ == "__main__":
-    demo.launch(share=True)
+    print("🚀 Starting Gradio App...")
+    demo.launch(share=True, server_port=7860)
+
