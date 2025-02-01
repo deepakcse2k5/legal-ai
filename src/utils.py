@@ -8,10 +8,13 @@ from langchain.chains.llm import LLMChain
 from langchain.chains.combine_documents.stuff import StuffDocumentsChain
 from langchain.chains import RetrievalQA
 
+from src.config import MODEL_NAME
+
 
 def load_pdf(file_path):
     """Load a PDF file properly."""
     return PDFPlumberLoader(file_path).load()
+
 
 def create_retriever(docs):
     """Process documents and create a retriever."""
@@ -21,41 +24,41 @@ def create_retriever(docs):
 
 def get_qa_chain(retriever):
     """Set up the QA chain using the retriever with GPU fallback."""
-    model_name = "deepseek-r1:1.5b"
-    llm = Ollama(model=model_name)
+    llm = Ollama(model=MODEL_NAME)  # Faster inference
 
     qa_prompt = PromptTemplate.from_template(
         """
-        You are a legal expert specializing in the provided context. Your task is to answer the user's question based solely on the provided content.
-
+        You are a legal expert providing direct answers based only on the provided context.
         ---
         Guidelines:
         1. Use only the provided context; do not add external knowledge.
         2. Be concise and accurate. If the context lacks sufficient information, state: "The provided context does not contain sufficient information to answer this question."
         3. Format your response clearly and reference the context where applicable.
         4. Avoid speculation and do not provide legal advice beyond the context.
+        5. Do **not** include any phrases like **"Let me check"**, **"Thinking"**,**""think""** or **"I need to figure out.
+        6.Do **not** explain your thought process.
+        7. If the context does not contain an answer, respond with: "I  don't know"
+
+    
 
         Context: {context}
         Question: {question}
 
-        Helpful Answer:
+        Answer:
         """
     )
-    return RetrievalQA(
-        combine_documents_chain=StuffDocumentsChain(
-            llm_chain=LLMChain(llm=llm, prompt=qa_prompt, verbose=True),
-            document_variable_name="context",
-            document_prompt=PromptTemplate(input_variables=["page_content", "source"], template="Context:\\n{page_content}\\nSource: {source}"),
-        ),
+
+    return RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
         retriever=retriever,
-        verbose=True,
+        chain_type_kwargs={"prompt": qa_prompt},
         return_source_documents=True,
     )
 
 def summarize_document(docs):
     """Generate a summary of the document with GPU fallback."""
-    model_name = "deepseek-r1:1.5b"
-    llm = Ollama(model=model_name)
+    llm = Ollama(model=MODEL_NAME)
 
     summary_prompt = PromptTemplate.from_template(
         """
