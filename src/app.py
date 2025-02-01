@@ -1,22 +1,20 @@
 import gradio as gr
 import os
 import shutil
+import pdfplumber  # Ensure this is installed
 import asyncio
 import aiofiles
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-# Import utilities from modules
+# Import utilities from modules (Make sure files exist in the same directory)
 from src.utils import load_pdf, create_retriever, get_qa_chain, summarize_document
-from src.generate_report import (
-    UPLOAD_FOLDER, extract_text_from_pdf, generate_complaint_report,
-    save_report_as_docx, OUTPUT_FOLDER
-)
+from src.generate_report import extract_text_from_pdf, generate_complaint_report, save_report_as_docx
 
-# Thread pool for running CPU-heavy tasks asynchronously
+# Thread pool for handling CPU-heavy tasks
 executor = ThreadPoolExecutor()
 
-# Global storage for the latest document state
+# Store the latest document processing state
 latest_state = {
     "docs": None,
     "retriever": None,
@@ -25,43 +23,30 @@ latest_state = {
 }
 
 
-async def save_uploaded_file(uploaded_file, destination: str):
-    """Save uploaded file asynchronously to the specified destination."""
-    try:
-        async with aiofiles.open(destination, "wb") as buffer:
-            while chunk := await uploaded_file.read(1024 * 1024):  # Read in chunks
-                await buffer.write(chunk)
-    finally:
-        await uploaded_file.close()
-
-
-def process_pdf_sync(file_path: str):
-    """Load PDF and initialize retriever and QA chain (CPU-bound, runs in a thread)."""
-    docs = load_pdf(file_path)
-    retriever = create_retriever(docs)
-    qa_chain = get_qa_chain(retriever)
-
-    latest_state["docs"] = docs
-    latest_state["retriever"] = retriever
-    latest_state["qa_chain"] = qa_chain
-
-
+# ✅ Function to Upload and Process PDF
 def upload_file(file):
-    """Upload and process a PDF file."""
     try:
         temp_filename = "latest_uploaded.pdf"
         with open(temp_filename, "wb") as buffer:
             buffer.write(file.read())
 
-        process_pdf_sync(temp_filename)
+        # Process PDF
+        docs = load_pdf(temp_filename)
+        retriever = create_retriever(docs)
+        qa_chain = get_qa_chain(retriever)
+
+        latest_state["docs"] = docs
+        latest_state["retriever"] = retriever
+        latest_state["qa_chain"] = qa_chain
+
         os.remove(temp_filename)  # Cleanup
         return "File uploaded and processed successfully"
     except Exception as e:
         return f"Upload failed: {str(e)}"
 
 
+# ✅ Function to Get Summary
 def get_summary():
-    """Retrieve the summary of the latest uploaded document."""
     if latest_state["docs"] is None:
         return "No document uploaded."
     if latest_state["summary"] is None:
@@ -69,18 +54,18 @@ def get_summary():
     return latest_state["summary"]
 
 
+# ✅ Function to Ask AI Legal Assistant
 def ask_question(question):
-    """Answer questions related to the uploaded document."""
     if latest_state["qa_chain"] is None:
         return "No document uploaded."
     response = latest_state["qa_chain"](question)["result"]
     return response
 
 
+# ✅ Function to Upload Reference PDF
 def upload_pdf(file):
-    """Upload a reference PDF and extract its text."""
     try:
-        filepath = os.path.join(UPLOAD_FOLDER, file.name)
+        filepath = f"./{file.name}"
         with open(filepath, "wb") as buffer:
             buffer.write(file.read())
 
@@ -90,9 +75,9 @@ def upload_pdf(file):
         return f"Reference file upload failed: {str(e)}", ""
 
 
+# ✅ Function to Generate Legal Report
 def generate_report(case_title, court, petitioner, respondent, filing_date, incident_summary, legal_claims,
                     reliefs_sought, evidence, reference_text):
-    """Generate a complaint report based on case details and reference text."""
     try:
         if not reference_text:
             return "Reference text is required."
@@ -114,26 +99,26 @@ def generate_report(case_title, court, petitioner, respondent, filing_date, inci
         filename = f"Complaint_Report_{petitioner.replace(' ', '_')}.docx"
         filepath = save_report_as_docx(report_text, filename)
 
-        return f"Report generated successfully. Download here: {filepath}"
+        return f"Report generated successfully. Download: {filepath}"
     except Exception as e:
         return f"Report generation failed: {str(e)}"
 
 
-# Create Gradio Interface
+# ✅ Creating the Gradio Interface
 with gr.Blocks() as demo:
     gr.Markdown("## 📑 AI-Powered Legal Document Processing System")
 
     with gr.Tab("📂 Upload Document"):
         upload_button = gr.File(label="Upload PDF")
         upload_output = gr.Textbox()
-        upload_button.change(upload_file, upload_button, upload_output)
+        upload_button.upload(upload_file, upload_button, upload_output)
 
     with gr.Tab("📖 Get Summary"):
         summary_button = gr.Button("Get Summary")
         summary_output = gr.Textbox()
         summary_button.click(get_summary, inputs=[], outputs=summary_output)
 
-    with gr.Tab("❓ Ask Questions"):
+    with gr.Tab("❓ Ask AI Legal Assistant"):
         question_input = gr.Textbox(label="Enter your question")
         question_button = gr.Button("Ask")
         question_output = gr.Textbox()
@@ -143,7 +128,7 @@ with gr.Blocks() as demo:
         ref_upload_button = gr.File(label="Upload Reference PDF")
         ref_upload_output = gr.Textbox()
         ref_upload_text = gr.Textbox()
-        ref_upload_button.change(upload_pdf, ref_upload_button, [ref_upload_output, ref_upload_text])
+        ref_upload_button.upload(upload_pdf, ref_upload_button, [ref_upload_output, ref_upload_text])
 
     with gr.Tab("📜 Generate Report"):
         case_title = gr.Textbox(label="Case Title")
@@ -166,4 +151,6 @@ with gr.Blocks() as demo:
             outputs=report_output
         )
 
-demo.launch(share=True)
+# ✅ Launch Gradio App (Auto generates a public link)
+if __name__ == "__main__":
+    demo.launch(share=True)
