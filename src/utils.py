@@ -7,6 +7,12 @@ from langchain.prompts import PromptTemplate
 from langchain.chains.llm import LLMChain
 from langchain.chains.combine_documents.stuff import StuffDocumentsChain
 from langchain.chains import RetrievalQA
+import ollama
+import re
+
+from sympy.physics.units import temperature
+
+from src.config import LLM_MODEL, TEMPERATURE, TOP_P, TOP_K, MAX_TOKENS, FREQUENCY_PENALTY, PRESENCE_PENALTY, STOP_SEQUENCES
 
 
 def load_pdf(file_path):
@@ -19,53 +25,85 @@ def create_retriever(docs):
     documents = SemanticChunker(embedder).split_documents(docs)
     return FAISS.from_documents(documents, embedder).as_retriever(search_type="similarity", search_kwargs={"k": 3})
 
-def get_qa_chain(retriever):
-    """Set up the QA chain using the retriever with GPU fallback."""
-    model_name = "deepseek-r1:1.5b"
-    llm = Ollama(model=model_name)
 
-    qa_prompt = PromptTemplate.from_template(
-        """
-        You are a legal expert specializing in the provided context. Your task is to answer the user's question based solely on the provided content.
+
+def get_qa_chain(retriever):
+    """Set up the QA chain using the retriever with structured response handling."""
+
+    def ollama_qa(question):
+        """Send the question and retrieved context to the Ollama model and process the response."""
+        # Retrieve relevant documents using the retriever
+        documents = retriever.get_relevant_documents(question)
+        context = "\n".join([doc.page_content for doc in documents])
+
+        # Format the prompt using the provided template
+        qa_prompt = f"""
+        You are a legal expert specializing in the provided context. Your task is to answer the user's question concisely and accurately based only on the given context.
 
         ---
         Guidelines:
         1. Use only the provided context; do not add external knowledge.
-        2. Be concise and accurate. If the context lacks sufficient information, state: "The provided context does not contain sufficient information to answer this question."
-        3. Format your response clearly and reference the context where applicable.
-        4. Avoid speculation and do not provide legal advice beyond the context.
+        2. Provide a direct and precise answer. Avoid any reasoning, explanations, or unnecessary text.
+        3. If the context lacks sufficient information, state exactly: "The provided context does not contain sufficient information to answer this question."
+        4. Format your response clearly and reference the context where applicable.
+        5. **Do not include introductory phrases, speculative analysis, or personal opinions.**
+        6. **Return only the final answer.**
+        7. **Ensure the answer is structured properly.**
 
         Context: {context}
         Question: {question}
 
-        Helpful Answer:
+        Answer:
         """
-    )
-    return RetrievalQA(
-        combine_documents_chain=StuffDocumentsChain(
-            llm_chain=LLMChain(llm=llm, prompt=qa_prompt, verbose=True),
-            document_variable_name="context",
-            document_prompt=PromptTemplate(input_variables=["page_content", "source"], template="Context:\\n{page_content}\\nSource: {source}"),
-        ),
-        retriever=retriever,
-        verbose=True,
-        return_source_documents=True,
-    )
+
+        # Send the prompt to the Ollama model
+        response = ollama.chat(
+            model=LLM_MODEL,
+            messages=[{'role': 'user', 'content': qa_prompt}]
+        )
+        response_content = response['message']['content']
+
+        # Remove content between <think> and </think> tags to remove thinking output
+        final_answer = re.sub(r'<think>.*?</think>', '', response_content, flags=re.DOTALL).strip()
+
+        # Include sources from the retrieved documents
+        sources = [doc.metadata["source"] for doc in documents]
+        return {"answer": final_answer, "sources": sources}
+
+    return ollama_qa
+
 
 def summarize_document(docs):
-    """Generate a summary of the document with GPU fallback."""
-    model_name = "deepseek-r1:1.5b"
-    llm = Ollama(model=model_name)
+    """Generate a structured summary of the legal document with proper formatting."""
 
-    summary_prompt = PromptTemplate.from_template(
-        """
-        Summarize the following legal document concisely, preserving key details and intent.
+    # Extract document content
+    document_text = "\n".join([doc.page_content for doc in docs])
 
-        ---
-        Document: {document}
+    # Define the structured summary prompt
+    summary_prompt = f"""
+    You are a legal expert tasked with summarizing the given legal document concisely while preserving its key details and intent.
 
-        Summary:
-        """
+    ---
+    Guidelines:
+    1. Maintain clarity and conciseness.
+    2. Retain key legal terms and critical details.
+    3. Do not introduce external information or analysis.
+    4. Ensure the summary is structured properly.
+
+    Document:
+    {document_text}
+
+    Summary:
+    """
+
+    # Initialize the Ollama model
+    response = ollama.chat(
+        model=LLM_MODEL,
+        messages=[{'role': 'user', 'content': summary_prompt}]
     )
-    llm_chain = LLMChain(llm=llm, prompt=summary_prompt, verbose=True)
-    return llm_chain.run({"document": " ".join([doc.page_content for doc in docs])})
+    response_content = response['message']['content']
+
+    # Remove any unwanted tags like <think> if present
+    final_summary = re.sub(r'<think>.*?</think>', '', response_content, flags=re.DOTALL).strip()
+
+    return final_summary
