@@ -48,21 +48,34 @@ class DocumentProcessor:
         """Generates a summary for the latest uploaded document."""
         if not self.latest_docs:
             raise HTTPException(status_code=404, detail="No document uploaded")
+
         if self.latest_summary is None:
             self.latest_summary = summarize_document(self.latest_docs)
-        return {"summary": self.latest_summary}
+
+        # Ensure the response contains a properly formatted summary
+        if not self.latest_summary or "summary" not in self.latest_summary or not self.latest_summary[
+            "summary"].strip():
+            raise HTTPException(status_code=500, detail="Failed to generate a valid summary")
+
+        return {self.latest_summary["summary"].strip()}  # Return only the clean summary
 
     def answer_question(self, question: str):
         """Answers a question related to the latest document."""
         if not self.latest_qa_chain:
             raise HTTPException(status_code=404, detail="No document uploaded")
+
         try:
             response = self.latest_qa_chain(question)
-            if not response or "answer" not in response:
+
+            # Ensure response is valid and contains an answer
+            if not response or "answer" not in response or not response["answer"].strip():
                 raise HTTPException(status_code=500, detail="Failed to retrieve a valid answer")
-            return {"answer": response["answer"]}
+
+            return {"answer": response["answer"].strip()}  # Return only the clean answer
+
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+
 
 document_processor = DocumentProcessor()
 

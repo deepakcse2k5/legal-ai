@@ -4,6 +4,8 @@ from langchain_community.document_loaders import PDFPlumberLoader
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+from sympy.physics.units import temperature
+
 from src.config import (
     LLM_MODEL, TEMPERATURE, TOP_P, TOP_K, MAX_TOKENS,
     FREQUENCY_PENALTY, PRESENCE_PENALTY, STOP_SEQUENCES
@@ -59,29 +61,42 @@ def get_qa_chain(retriever):
 
         Answer:
         """
-        final_answer = generate_response(qa_prompt)
-        sources = [doc.metadata.get("source", "Unknown") for doc in documents]
-        return {"answer": final_answer, "sources": sources}
+
+        final_answer = generate_response(qa_prompt).strip()
+
+        return {"answer": final_answer}
 
     return ollama_qa
+
 
 
 def summarize_document(docs):
     """Generate a structured summary of the legal document."""
     document_text = "\n".join([doc.page_content for doc in docs])
+
     summary_prompt = f"""
     You are a legal expert tasked with summarizing the given legal document concisely while preserving its key details and intent.
 
     ---
     Guidelines:
-    1. Maintain clarity and conciseness.
-    2. Retain key legal terms and critical details.
-    3. Do not introduce external information or analysis.
-    4. Ensure the summary is structured properly.
+    1. Use only the provided context; do not add external knowledge.
+    2. Provide a direct and precise summary. Avoid any reasoning, or unnecessary text.
+    3. Format your response clearly and reference the context where applicable.
+    4. **Do not include introductory phrases,external information, speculative analysis, or personal opinions.**
+    5. Maintain clarity and conciseness.
+    6. Retain key legal terms and critical details.
+    7. **Return only the summary.**
+    8. Ensure the summary is structured properly.
 
     Document:
     {document_text}
 
     Summary:
     """
-    return generate_response(summary_prompt)
+
+    summary = generate_response(summary_prompt).strip()
+
+    # Format the summary properly
+    # formatted_summary = f"**Summary:**\n{summary}"
+
+    return {"summary": summary}
