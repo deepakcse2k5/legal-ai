@@ -12,3 +12,4 @@ uvicorn
 fpdf
 pymupdf
 python-docx
+groq

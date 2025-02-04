@@ -1,42 +1,46 @@
+import re
+import ollama
 from langchain_community.document_loaders import PDFPlumberLoader
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_community.llms import Ollama
-from langchain.prompts import PromptTemplate
-from langchain.chains.llm import LLMChain
-from langchain.chains.combine_documents.stuff import StuffDocumentsChain
-from langchain.chains import RetrievalQA
-import ollama
-import re
-
-from sympy.physics.units import temperature
-
-from src.config import LLM_MODEL, TEMPERATURE, TOP_P, TOP_K, MAX_TOKENS, FREQUENCY_PENALTY, PRESENCE_PENALTY, STOP_SEQUENCES
+from src.config import (
+    LLM_MODEL, TEMPERATURE, TOP_P, TOP_K, MAX_TOKENS,
+    FREQUENCY_PENALTY, PRESENCE_PENALTY, STOP_SEQUENCES
+)
 
 
 def load_pdf(file_path):
-    """Load a PDF file properly."""
+    """Load a PDF file and return documents."""
     return PDFPlumberLoader(file_path).load()
 
-def create_retriever(docs):
+
+def create_retriever(docs, k=3):
     """Process documents and create a retriever."""
     embedder = HuggingFaceEmbeddings()
     documents = SemanticChunker(embedder).split_documents(docs)
-    return FAISS.from_documents(documents, embedder).as_retriever(search_type="similarity", search_kwargs={"k": 3})
+    return FAISS.from_documents(documents, embedder).as_retriever(
+        search_type="similarity", search_kwargs={"k": k}
+    )
 
+
+def generate_response(prompt):
+    """Generate a response from the Ollama model."""
+    response = ollama.chat(
+        model=LLM_MODEL,
+        messages=[{'role': 'user', 'content': prompt}]
+    )
+    response_content = response['message']['content']
+    return re.sub(r'<think>.*?</think>', '', response_content, flags=re.DOTALL).strip()
 
 
 def get_qa_chain(retriever):
-    """Set up the QA chain using the retriever with structured response handling."""
+    """Set up the QA chain using the retriever."""
 
     def ollama_qa(question):
-        """Send the question and retrieved context to the Ollama model and process the response."""
-        # Retrieve relevant documents using the retriever
         documents = retriever.get_relevant_documents(question)
         context = "\n".join([doc.page_content for doc in documents])
 
-        # Format the prompt using the provided template
         qa_prompt = f"""
         You are a legal expert specializing in the provided context. Your task is to answer the user's question concisely and accurately based only on the given context.
 
@@ -55,31 +59,16 @@ def get_qa_chain(retriever):
 
         Answer:
         """
-
-        # Send the prompt to the Ollama model
-        response = ollama.chat(
-            model=LLM_MODEL,
-            messages=[{'role': 'user', 'content': qa_prompt}]
-        )
-        response_content = response['message']['content']
-
-        # Remove content between <think> and </think> tags to remove thinking output
-        final_answer = re.sub(r'<think>.*?</think>', '', response_content, flags=re.DOTALL).strip()
-
-        # Include sources from the retrieved documents
-        sources = [doc.metadata["source"] for doc in documents]
+        final_answer = generate_response(qa_prompt)
+        sources = [doc.metadata.get("source", "Unknown") for doc in documents]
         return {"answer": final_answer, "sources": sources}
 
     return ollama_qa
 
 
 def summarize_document(docs):
-    """Generate a structured summary of the legal document with proper formatting."""
-
-    # Extract document content
+    """Generate a structured summary of the legal document."""
     document_text = "\n".join([doc.page_content for doc in docs])
-
-    # Define the structured summary prompt
     summary_prompt = f"""
     You are a legal expert tasked with summarizing the given legal document concisely while preserving its key details and intent.
 
@@ -95,15 +84,4 @@ def summarize_document(docs):
 
     Summary:
     """
-
-    # Initialize the Ollama model
-    response = ollama.chat(
-        model=LLM_MODEL,
-        messages=[{'role': 'user', 'content': summary_prompt}]
-    )
-    response_content = response['message']['content']
-
-    # Remove any unwanted tags like <think> if present
-    final_summary = re.sub(r'<think>.*?</think>', '', response_content, flags=re.DOTALL).strip()
-
-    return final_summary
+    return generate_response(summary_prompt)
