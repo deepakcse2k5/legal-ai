@@ -1,7 +1,7 @@
 import re
 import logging
 import ollama
-from langchain_community.document_loaders import PDFPlumberLoader
+from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -19,9 +19,10 @@ EMBEDDINGS = HuggingFaceEmbeddings()
 
 
 def load_pdf(file_path):
-    """Load a PDF file and return parsed documents."""
+    """Load a PDF file using LangChain's PyPDFLoader and return parsed documents."""
     try:
-        return PDFPlumberLoader(file_path).load()
+        loader = UnstructuredPDFLoader(file_path)
+        return loader.load()
     except Exception as e:
         logger.error(f"Error loading PDF {file_path}: {e}")
         raise ValueError("Failed to load the PDF file")
@@ -54,6 +55,7 @@ def generate_response(prompt):
             }
         )
         content = response.get("message", {}).get("content", "").strip()
+        logger.info(f"content: {content}")
 
         if not content:
             logger.warning("Received an empty response from Ollama")

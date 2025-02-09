@@ -1,5 +1,5 @@
 LLM_MODEL = "deepseek-r1:1.5b"
-# LLM_MODEL = "deepseek-r1"
+# LLM_MODEL = "qwen:latest"
 TEMPERATURE= 0.015
 TOP_P= 0.4
 TOP_K= 50
@@ -7,3 +7,5 @@ MAX_TOKENS= 100
 FREQUENCY_PENALTY= 0.7
 PRESENCE_PENALTY= 0.4
 STOP_SEQUENCES= "\n"
+UPLOAD_FOLDER = "uploaded_files"
+OUTPUT_FOLDER = "generated_reports"
