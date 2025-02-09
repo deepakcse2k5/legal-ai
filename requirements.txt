@@ -13,3 +13,10 @@ fpdf
 pymupdf
 python-docx
 groq
+pypdf
+unstructured[pdf]
+poppler-utils
+tesseract-ocr
+libmagic
+libreoffice
+nltk

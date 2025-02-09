@@ -6,6 +6,9 @@ from pydantic import BaseModel
 from typing import Dict
 from tempfile import NamedTemporaryFile
 from src.utils import load_pdf, create_retriever, get_qa_chain, summarize_document
+import nltk
+nltk.download('punkt_tab')
+nltk.download('averaged_perceptron_tagger_eng')
 
 # Configure logging
 logger = logging.getLogger(__name__)
