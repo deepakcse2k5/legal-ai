@@ -1,126 +1,124 @@
-import os
+"""FastAPI service. Upload a PDF, get a session id, then ask / summarise / draft against that session."""
 import logging
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Dict
-from tempfile import NamedTemporaryFile
-from src.utils import load_pdf, create_retriever, get_qa_chain, summarize_document
-import nltk
-nltk.download('punkt_tab')
-nltk.download('averaged_perceptron_tagger_eng')
+from pydantic import BaseModel, Field
 
-# Configure logging
-logger = logging.getLogger(__name__)
+from src import service
+from src.config import settings
+from src.llm import LLMError
+from src.loader import DocumentError
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+log = logging.getLogger("legal-ai")
 
-# FastAPI app initialization
-app = FastAPI()
-
-# CORS Middleware (restrict origins in production)
+app = FastAPI(title="Legal AI", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change "*" to specific domains
-    allow_credentials=True,
-    allow_methods=["POST"],
+    allow_origins=list(settings.cors_origins),
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
 
+class UploadResponse(BaseModel):
+    session_id: str
+    filename: str
+    pages: int
+    passages: int
+
+
+class Source(BaseModel):
+    page: int
+    chunk: int
+    text: str
+
+
 class QueryRequest(BaseModel):
-    question: str
+    session_id: str
+    question: str = Field(min_length=3, max_length=500)
+
+
+class QueryResponse(BaseModel):
+    answer: str
+    sources: list[Source]
+
+
+class SessionRequest(BaseModel):
+    session_id: str
 
 
 class SummaryResponse(BaseModel):
     summary: str
 
 
-class AnswerResponse(BaseModel):
-    answer: str
+class DraftRequest(BaseModel):
+    session_id: str
+    kind: str
 
 
-class UploadResponse(BaseModel):
-    message: str
+class DraftResponse(BaseModel):
+    draft: str
 
 
-class DocumentProcessor:
-    """Handles document processing and retrieval operations."""
-
-    def __init__(self):
-        self.latest_docs = None
-        self.latest_retriever = None
-        self.latest_qa_chain = None
-        self.latest_summary = None
-
-    async def process_upload(self, file: UploadFile) -> Dict[str, str]:
-        """Uploads and processes a PDF file."""
-        try:
-            # Use NamedTemporaryFile to avoid manual file cleanup
-            with NamedTemporaryFile(delete=True, suffix=".pdf") as temp_file:
-                temp_file.write(await file.read())
-                temp_file.flush()  # Ensure all data is written before processing
-
-                self.latest_docs = load_pdf(temp_file.name)
-                self.latest_retriever = create_retriever(self.latest_docs)
-                self.latest_qa_chain = get_qa_chain(self.latest_retriever)
-                self.latest_summary = None  # Reset summary
-
-            logger.info("File uploaded and processed successfully")
-            return {"message": "File uploaded and processed successfully"}
-
-        except Exception as e:
-            logger.error(f"Error processing file: {e}")
-            raise HTTPException(status_code=500, detail="Error processing file")
-
-    def generate_summary(self) -> SummaryResponse:
-        """Generates a summary for the latest uploaded document."""
-        if not self.latest_docs:
-            raise HTTPException(status_code=404, detail="No document uploaded")
-
-        if self.latest_summary is None:
-            self.latest_summary = summarize_document(self.latest_docs)
-
-        if not self.latest_summary or "summary" not in self.latest_summary or not self.latest_summary[
-            "summary"].strip():
-            raise HTTPException(status_code=500, detail="Failed to generate a valid summary")
-
-        return SummaryResponse(summary=self.latest_summary["summary"].strip())
-
-    def answer_question(self, question: str) -> AnswerResponse:
-        """Answers a question related to the latest document."""
-        if not self.latest_qa_chain:
-            raise HTTPException(status_code=404, detail="No document uploaded")
-
-        try:
-            response = self.latest_qa_chain(question)
-
-            if not response or "answer" not in response or not response["answer"].strip():
-                raise HTTPException(status_code=500, detail="Failed to retrieve a valid answer")
-
-            return AnswerResponse(answer=response["answer"].strip())
-
-        except Exception as e:
-            logger.error(f"Error answering question: {e}")
-            raise HTTPException(status_code=500, detail="Error processing question")
+def _session(sid: str) -> service.Session:
+    try:
+        return service.store.get(sid)
+    except service.SessionNotFound:
+        raise HTTPException(404, "Unknown or expired session. Upload the document again.")
 
 
-# Singleton instance of DocumentProcessor
-document_processor = DocumentProcessor()
+def _llm(call):
+    try:
+        return call()
+    except LLMError as exc:
+        log.error("LLM error: %s", exc)
+        raise HTTPException(502, str(exc))
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "provider": settings.llm_provider}
+
+
+@app.get("/drafts")
+def drafts():
+    return {"kinds": list(service.DRAFTS)}
 
 
 @app.post("/upload", response_model=UploadResponse)
-async def upload_file(file: UploadFile = File(...)):
-    """Endpoint for uploading and processing a PDF document."""
-    return await document_processor.process_upload(file)
+async def upload(file: UploadFile = File(...)):
+    data = await file.read(settings.max_upload_mb * 1024 * 1024 + 1)
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(413, f"File is larger than {settings.max_upload_mb} MB.")
+    if not data.startswith(b"%PDF"):
+        raise HTTPException(415, "Only PDF files are supported.")
+    try:
+        s = service.store.create(file.filename or "document.pdf", data)
+    except DocumentError as exc:
+        raise HTTPException(422, str(exc))
+    return UploadResponse(session_id=s.id, filename=s.filename, pages=s.pages, passages=len(s.chunks))
+
+
+@app.post("/query", response_model=QueryResponse)
+def query(req: QueryRequest):
+    return _llm(lambda: service.answer(_session(req.session_id), req.question))
 
 
 @app.post("/summary", response_model=SummaryResponse)
-async def get_summary():
-    """Endpoint for retrieving the document summary."""
-    return document_processor.generate_summary()
+def summary(req: SessionRequest):
+    return SummaryResponse(summary=_llm(lambda: service.summarize(_session(req.session_id))))
 
 
-@app.post("/query", response_model=AnswerResponse)
-async def ask_question(request: QueryRequest):
-    """Endpoint for querying the processed document."""
-    return document_processor.answer_question(request.question)
+@app.post("/draft", response_model=DraftResponse)
+def draft(req: DraftRequest):
+    if req.kind not in service.DRAFTS:
+        raise HTTPException(400, f"Unknown draft type. Choose one of: {', '.join(service.DRAFTS)}")
+    return DraftResponse(draft=_llm(lambda: service.draft(_session(req.session_id), req.kind)))
+
+
+@app.delete("/session/{session_id}")
+def delete_session(session_id: str):
+    service.store.delete(session_id)
+    return {"deleted": True}
