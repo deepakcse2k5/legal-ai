@@ -1,6 +1,7 @@
-"""LLM access behind one function. Providers: local Ollama (default) or Groq."""
+"""LLM access behind one function. Providers: Cloudflare Workers AI, Groq, or local Ollama."""
 import re
 
+from src import cloudflare
 from src.config import settings
 
 
@@ -26,6 +27,12 @@ def generate(system: str, user: str, max_tokens: int) -> str:
                 max_tokens=max_tokens,
             )
             text = out.choices[0].message.content or ""
+        elif settings.llm_provider == "cloudflare":
+            text = cloudflare.run(
+                settings.cf_model,
+                {"messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                 "max_tokens": max_tokens, "temperature": settings.temperature},
+            ).get("response") or ""
         else:
             import ollama
 

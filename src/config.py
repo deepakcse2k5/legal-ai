@@ -9,7 +9,13 @@ def _int(name: str, default: int) -> int:
 
 @dataclass(frozen=True)
 class Settings:
-    llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")          # "ollama" or "groq"
+    llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")          # "ollama", "groq" or "cloudflare"
+    cf_account_id: str = os.getenv("CF_ACCOUNT_ID", "")
+    cf_api_token: str = os.getenv("CF_API_TOKEN", "")
+    cf_model: str = os.getenv("CF_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast")
+    cf_embed_model: str = os.getenv("CF_EMBED_MODEL", "@cf/baai/bge-base-en-v1.5")
+    embeddings: str = os.getenv("EMBEDDINGS", "none")                 # "cloudflare" or "none" (keyword search only)
+    api_key: str = os.getenv("API_KEY", "")                           # if set, callers must send X-API-Key
     ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
     groq_model: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
