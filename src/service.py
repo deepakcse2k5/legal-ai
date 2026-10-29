@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from src import llm
 from src.config import settings
 from src.loader import Chunk, chunk_pages, extract_pages
-from src.retrieval import Retriever
+from src.retrieval import HybridRetriever
 
 RULES = (
     "Use ONLY the text provided. Cite every point with its page as [p. N]. "
@@ -29,7 +29,7 @@ class Session:
     filename: str
     pages: int
     chunks: list[Chunk]
-    retriever: Retriever
+    retriever: HybridRetriever
     created: float = field(default_factory=time.time)
     summary: str | None = None
 
@@ -56,7 +56,7 @@ class Store:
     def create(self, filename: str, data: bytes) -> Session:
         pages = extract_pages(data, settings.max_pages)
         chunks = chunk_pages(pages, settings.chunk_chars)
-        sess = Session(uuid.uuid4().hex, filename, len(pages), chunks, Retriever(chunks))
+        sess = Session(uuid.uuid4().hex, filename, len(pages), chunks, HybridRetriever(chunks))
         with self._lock:
             self._purge()
             self._items[sess.id] = sess

@@ -5,4 +5,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src ./src
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
-CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Render and similar hosts set $PORT
+CMD ["sh", "-c", "uvicorn src.app:app --host 0.0.0.0 --port ${PORT:-8000}"]

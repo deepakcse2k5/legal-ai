@@ -9,12 +9,25 @@ A live, no-install version of the same idea runs at https://legal.pravija.ai (so
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env            # choose the model provider
-ollama pull llama3.1:8b         # if using Ollama
+cp .env.example .env            # choose the model provider, set API_KEY
+set -a && source .env && set +a
 uvicorn src.app:app --reload
 ```
 
-Docs and a try-it page: http://localhost:8000/docs. With Docker: `docker build -t legal-ai . && docker run -p 8000:8000 --env-file .env legal-ai` (point `OLLAMA_HOST` at your Ollama server, or use Groq).
+Interactive docs: http://localhost:8000/docs. With Docker: `docker build -t legal-ai . && docker run -p 8000:8000 --env-file .env legal-ai`.
+
+**Models.** `LLM_PROVIDER` is `cloudflare` (Workers AI over its REST API), `groq`, or `ollama` (local). With `EMBEDDINGS=cloudflare`, retrieval combines keyword (BM25) and semantic (embedding) search; if the embedding call fails it falls back to keyword search automatically.
+
+**Access.** If `API_KEY` is set, every call except `/health` must send it as `X-API-Key`. Always set it on a public host: it stops strangers from spending your model budget.
+
+## Deploy on Render
+
+1. Render dashboard: **New + > Blueprint**, pick this repo (`render.yaml` is picked up).
+2. Enter `CF_ACCOUNT_ID` and `CF_API_TOKEN` when asked. The token is created at dash.cloudflare.com/profile/api-tokens from the "Workers AI" template.
+3. After the first deploy, copy the generated `API_KEY` from the service's Environment tab. You need it in the website Worker and in legal-ui.
+4. Check `https://<your-service>.onrender.com/health`.
+
+The free plan sleeps after 15 minutes idle and takes about a minute to wake; use a paid instance for client demos. Sessions are held in memory, so a restart clears uploaded documents.
 
 ## API
 
@@ -28,6 +41,12 @@ Docs and a try-it page: http://localhost:8000/docs. With Docker: `docker build -
 | `GET /health` | Status and provider |
 
 Every upload gets its own session that expires after an hour (`SESSION_TTL_SECONDS`), and documents are kept only in memory.
+
+## What changed in v3
+
+- **Cloudflare Workers AI provider** (chat and embeddings), alongside Groq and Ollama.
+- **Hybrid retrieval** (keyword + semantic, reciprocal rank fusion) with automatic fallback.
+- **API key** protection and a Render blueprint, so a website can call it safely.
 
 ## What changed in v2
 
